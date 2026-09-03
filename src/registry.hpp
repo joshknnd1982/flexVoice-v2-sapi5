@@ -5,7 +5,7 @@
 #include <vector>
 #include <stdexcept>
 
-namespace FlexVoice {
+namespace fv2 {
 namespace registry {
 
 class error : public std::runtime_error

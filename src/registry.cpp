@@ -1,7 +1,7 @@
 #include <vector>
 #include "registry.hpp"
 
-namespace FlexVoice {
+namespace fv2 {
 namespace registry {
 
 std::wstring key::get(const std::wstring& name) const

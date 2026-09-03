@@ -12,7 +12,7 @@
 #include "registry.hpp"
 #include "utils.hpp"
 
-namespace FlexVoice {
+namespace fv2 {
 namespace com {
 
 [[nodiscard]] wchar_t* strdup(const std::wstring& s);

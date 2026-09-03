@@ -1,7 +1,7 @@
 #include <iterator>
 #include "ISpDataKeyImpl.hpp"
 
-namespace FlexVoice {
+namespace fv2 {
 namespace sapi {
 
 STDMETHODIMP ISpDataKeyImpl::GetData(LPCWSTR /*pszValueName*/, ULONG* /*pcbData*/, BYTE* /*pData*/)

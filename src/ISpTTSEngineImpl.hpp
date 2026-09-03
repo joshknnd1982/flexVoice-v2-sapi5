@@ -10,10 +10,10 @@
 #include "com.hpp"
 #include "voice_attributes.hpp"
 
-namespace FlexVoice {
+namespace fv2 {
 namespace sapi {
 
-class __declspec(uuid("5e1fa20e-0311-4dba-88a4-8455c601b75f")) ISpTTSEngineImpl :
+class __declspec(uuid("b7e42d61-3c95-4a18-9f6b-2ed40c8a5713")) ISpTTSEngineImpl :
     public ISpTTSEngine,
     public ISpObjectWithToken
 {
@@ -52,4 +52,4 @@ private:
 };
 
 }  // namespace sapi
-}  // namespace FlexVoice
+}  // namespace fv2

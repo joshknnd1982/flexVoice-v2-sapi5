@@ -6,7 +6,7 @@
 #include <memory>
 #include <windows.h>
 
-namespace FlexVoice {
+namespace fv2 {
 namespace utils {
 
 [[nodiscard]] inline std::wstring string_to_wstring(const std::string& s)

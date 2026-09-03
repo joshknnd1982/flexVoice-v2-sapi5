@@ -2,7 +2,7 @@
 #include <stdexcept>
 #include "com.hpp"
 
-namespace FlexVoice {
+namespace fv2 {
 namespace com {
 
 wchar_t* strdup(const std::wstring& s)

@@ -9,7 +9,7 @@
 
 #include "com.hpp"
 
-namespace FlexVoice {
+namespace fv2 {
 namespace sapi {
 
 class ISpDataKeyImpl : public ISpDataKey

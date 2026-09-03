@@ -1,5 +1,6 @@
+LIBRARY FlexVoice2SAPI
 EXPORTS
-    DllCanUnloadNow     PRIVATE
     DllGetClassObject   PRIVATE
+    DllCanUnloadNow     PRIVATE
     DllRegisterServer   PRIVATE
     DllUnregisterServer PRIVATE

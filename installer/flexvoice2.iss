@@ -28,7 +28,7 @@
 ;      vendor's voices, not just ours.
 
 #define MyAppName "FlexVoice 2 SAPI5"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "Josh Kennedy"
 #define MyAppURL "https://github.com/joshknnd1982/flexxVoice-v2-sapi5"
 

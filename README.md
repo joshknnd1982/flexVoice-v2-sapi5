@@ -73,11 +73,17 @@ Being honest about what is what:
   synthesiser, and it is also why the Custom Voice can sound like none of them.
 * The pack ships **six** `.tav` files, but `Default.tav` and `Julie.tav` are
   byte-identical, so shipping both would put one voice in the list twice.
-* Every voice carries a **measured level trim**. Rendering a demanding sentence
-  at each voice's own shipped `volume` gives peaks from 31285 to 54590 against a
-  ceiling of 32767: four of the five clip out of the box, Jill by 3.5 dB. The
-  trims put every voice at about −2 dBFS, which also means switching voices does
-  not jump the level.
+* Every voice carries a **measured level trim**, because four of the five clip
+  at Mindmaker's own shipped `volume` — peaks from 31285 to 54590 against a
+  ceiling of 32767, Jill by 3.5 dB.
+
+  The trims target **loudness, not peak**. Trimming to a safe peak was the
+  obvious thing and it made the roster too quiet: these voices have peaks 15 to
+  20 dB above their RMS, so holding the peak at −2 dBFS left the actual level at
+  −21 to −25 dBFS. Each voice now sits at −17 dBFS RMS, with the host's
+  soft-knee limiter handling what pokes above the ceiling — between 0.01% and
+  0.11% of samples on a demanding sentence. Switching voices does not jump the
+  level.
 
 Sample renders of every voice, of every parameter across its range, and of the
 inputs that were tried against the engine to see what breaks it, are in
@@ -118,7 +124,7 @@ measuring the rendered audio — duration, level, peak and clipping. See
 
 | Parameter | `.tav` key | Range | Scale | What moves |
 |---|---|---|---|---|
-| Volume | `volume` | 0 – 8 | linear | the voice's own loudness; peak amplitude is exactly proportional, 0 is true silence |
+| Volume | `volume` | 0 – 12 | linear | the voice's own loudness; amplitude is exactly proportional, 0 is true silence. The built-in voices sit near 5 |
 | Speed | `speechRate` | 0.25 – 4.0× | geometric | duration only, exactly; **no pitch change** |
 | Pitch | `defaultPitch` | 50 – 400 Hz | geometric | base F0, in hertz |
 | Pitch floor | `pitchMin` | 20 – 300 Hz | geometric | hard floor on the contour; only audible once it rises above the base pitch |
@@ -266,6 +272,12 @@ and plants another vendor's token first to confirm the sweep leaves it alone.
 ---
 
 ## When it does not speak
+
+**Restart your screen reader after installing.** NVDA builds its voice list when
+its speech driver starts, and it keeps 32-bit SAPI voices alive in a helper
+process; a voice installed underneath a running NVDA can be selected from the
+list and then produce nothing at all. Restarting NVDA fixes it, and it is worth
+trying before anything else here.
 
 The configuration utility says on startup whether the engine host is running.
 Beyond that:

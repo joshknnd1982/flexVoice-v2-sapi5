@@ -189,7 +189,7 @@ bool EngineClient::ensureConnected(std::string& error)
         // silent field failure: the structs would have moved underneath it.
         Fv2Pong pong = {};
         std::string perr;
-        if (ping(pong, perr) && pong.protocolVersion != FV2_PROTOCOL_VERSION) {
+        if (pingLocked(pong, perr) && pong.protocolVersion != FV2_PROTOCOL_VERSION) {
             FV2_LOG("client: host speaks protocol %u, we speak %u; replacing it",
                     pong.protocolVersion, FV2_PROTOCOL_VERSION);
             sendMessage(FV2_CMD_SHUTDOWN, nullptr, 0);
@@ -251,7 +251,10 @@ bool EngineClient::readHeader(Fv2MessageHeader& h)
     return true;
 }
 
-bool EngineClient::ping(Fv2Pong& pong, std::string& error)
+// Assumes the caller holds the lock and the connection is up. ensureConnected
+// uses this for its version check, which is why it cannot be the public entry
+// point: connecting would recurse.
+bool EngineClient::pingLocked(Fv2Pong& pong, std::string& error)
 {
     if (!sendMessage(FV2_CMD_PING, nullptr, 0)) { error = "ping failed"; return false; }
     Fv2MessageHeader h = {};
@@ -260,6 +263,23 @@ bool EngineClient::ping(Fv2Pong& pong, std::string& error)
     if (!readPayload(&pong, sizeof(pong))) { error = "short pong"; return false; }
     if (h.size > sizeof(pong) && !skipPayload(h.size - sizeof(pong))) return false;
     return true;
+}
+
+// The public entry point. It connects first -- which the previous version did
+// not, so the warm-up ping fired on a handle that was still
+// INVALID_HANDLE_VALUE, failed immediately, and every log in the field showed
+// "warm-up ping failed: ping failed". The warm-up existed to move the ~150 ms
+// host launch off the user's first keystroke, and it had never once done so.
+bool EngineClient::ping(Fv2Pong& pong, std::string& error)
+{
+    EnterCriticalSection(&lock_);
+    bool ok = false;
+    if (ensureConnected(error)) {
+        ok = pingLocked(pong, error);
+        if (!ok) disconnect();
+    }
+    LeaveCriticalSection(&lock_);
+    return ok;
 }
 
 bool EngineClient::getVoices(std::string& out, std::string& error)

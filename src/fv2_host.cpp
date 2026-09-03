@@ -11,6 +11,7 @@
 // they are engine-level multipliers that apply immediately.
 
 #include "fv2_engine.hpp"
+#include "fv2_limiter.hpp"
 #include "fv2_log.h"
 #include "fv2_protocol.h"
 #include "fv2_speaker.hpp"
@@ -147,27 +148,6 @@ bool send_error(HANDLE pipe, const std::string& msg)
 fv2::Engine g_engine;
 std::string g_dataDir;
 
-// A soft ceiling, so no combination of user parameters can produce the harsh
-// wrap-around of a clipped 16-bit sample. It only touches samples that were
-// going to clip anyway, so it is inaudible at normal levels -- and FlexVoice
-// needs it: four of Mindmaker's five voices clip at their own shipped volume.
-void limit(std::vector<unsigned char>& pcm)
-{
-    if (pcm.size() < 2) return;
-    short* s = reinterpret_cast<short*>(&pcm[0]);
-    const size_t n = pcm.size() / 2;
-    const int kKnee = 29000;
-    for (size_t i = 0; i < n; ++i) {
-        int v = s[i];
-        const int a = v < 0 ? -v : v;
-        if (a > kKnee) {
-            const int over = a - kKnee;
-            const int comp = kKnee + (over * (32700 - kKnee)) / (32768 - kKnee);
-            s[i] = static_cast<short>(v < 0 ? -comp : comp);
-        }
-    }
-}
-
 const fv2::VoiceInfo* find_voice(const std::string& name)
 {
     const std::vector<fv2::VoiceInfo>& v = fv2::builtinVoices();
@@ -271,7 +251,7 @@ bool handle_speak(HANDLE pipe, const std::vector<char>& payload)
         bool ok = true;
         switch (item.kind) {
         case fv2::StreamItem::AUDIO:
-            limit(item.audio);
+            fv2::limit(item.audio);
             ok = send_message(pipe, FV2_RESP_AUDIO, item.audio.data(),
                               (uint32_t)item.audio.size());
             break;

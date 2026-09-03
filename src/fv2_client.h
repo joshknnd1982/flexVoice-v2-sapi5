@@ -83,6 +83,7 @@ public:
 
 private:
     bool ensureConnected(std::string& error);
+    bool pingLocked(Fv2Pong& pong, std::string& error);
     void disconnect();
     bool launchServer(std::string& error);
     bool sendMessage(uint32_t type, const void* payload, uint32_t size);

@@ -11,7 +11,7 @@
 
 #define FV_VERSION_MAJOR 1
 #define FV_VERSION_MINOR 0
-#define FV_VERSION_PATCH 1
+#define FV_VERSION_PATCH 2
 #define FV_VERSION_BUILD 0
 
 #define FV_STRINGIZE2(x) #x

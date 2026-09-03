@@ -12,6 +12,7 @@
 // 32-bit, like everything that touches FlexVoice_2_00_010.dll.
 
 #include "../src/fv2_engine.hpp"
+#include "../src/fv2_limiter.hpp"
 #include "../src/fv2_voices.hpp"
 
 #include <windows.h>
@@ -163,6 +164,10 @@ int main(int argc, char** argv)
         }
         Drained d = drain(eng, t1);
 
+        // The host limits before anything reaches a client, and the voices are
+        // trimmed to a target RMS rather than a target peak, so the level that
+        // matters is the one after limiting. Same code the host runs.
+        fv2::limit(d.audio);
         int peak = 0; double dbfs = 0;
         level(d.audio, &peak, &dbfs);
         std::printf("  %-8s %6.2fs  select %5.1f ms  first audio %5.1f ms  "
@@ -173,7 +178,9 @@ int main(int argc, char** argv)
         check(d.done && !d.failed, "utterance completed");
         check(d.audio.size() > 16000, "produced a reasonable amount of audio");
         check(peak > 4000, "not silent");
-        check(peak <= 32700, "does not clip with the measured trim");
+        check(peak <= fv2::kLimiterCeiling, "the limiter holds the peak under the ceiling");
+        check(dbfs > -20.0 && dbfs < -14.0,
+              "loudness lands in the -20 to -14 dBFS band the roster is matched to");
         check(d.words > 10, "reported word boundaries");
 
         if (!outDir.empty()) {

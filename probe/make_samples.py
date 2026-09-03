@@ -20,12 +20,14 @@ if not os.path.exists(RENDER):
     RENDER = os.path.join(ROOT, "build", "probe", "fv2_render.exe")
 
 # name, .tav file, the measured level trim from src/fv2_voices.hpp
+# The shipping trims from src/fv2_voices.hpp: each voice at -17 dBFS RMS, with
+# the host's limiter handling the peaks.
 VOICES = [
-    ("Julie",  "Julie.tav",  4.82),
-    ("Bill",   "Bill.tav",   2.39),
-    ("Jill",   "Jill.tav",   1.59),
-    ("Julius", "Julius.tav", 2.29),
-    ("Kit",    "Kit.tav",    2.61),
+    ("Julie",  "Julie.tav",  7.47),
+    ("Bill",   "Bill.tav",   4.17),
+    ("Jill",   "Jill.tav",   2.72),
+    ("Julius", "Julius.tav", 5.69),
+    ("Kit",    "Kit.tav",    5.62),
 ]
 
 # Only the parameters the engine responds to; see fv2_params.inc.
@@ -146,7 +148,7 @@ def main():
     print("\nrobustness")
     for name, text in ROBUSTNESS:
         out = os.path.join(d, "%s.wav" % name)
-        r = render(args.data, julie, out, text, ["--set", "volume=4.82"])
+        r = render(args.data, julie, out, text, ["--set", "volume=7.47"])
         if r:
             print("  %-16s %ss  %s" % (name, r[1], text[:44]))
             index.append(("04-robustness/%s.wav" % name, text))

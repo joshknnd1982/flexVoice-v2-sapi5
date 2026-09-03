@@ -16,10 +16,10 @@
 //   id                    tavKey                label
 //     type        lo      hi      fallback  geometric  active
 { P_VOLUME, "volume", "Volume", PT_DOUBLE,
-  0.0, 8.0, 5.8, false, true,
-  "Loudness of the voice itself. Exactly linear: peak amplitude is "
-  "proportional to this value, 0 is true silence, and above about 7.7 a "
-  "loud sentence clips." },
+  0.0, 12.0, 7.47, false, true,
+  "Loudness of the voice itself. Exactly linear: amplitude is proportional "
+  "to this value, and 0 is true silence. The default matches the built-in "
+  "voices; above it the host's limiter starts shaving peaks." },
 
 { P_SPEECH_RATE, "speechRate", "Speed", PT_DOUBLE,
   0.25, 4.0, 1.0, true, true,

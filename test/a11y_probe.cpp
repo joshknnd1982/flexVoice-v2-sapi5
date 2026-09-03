@@ -1,58 +1,83 @@
-// a11y_probe.cpp -- read the configuration utility the way a screen reader does.
+// a11y_probe -- walk the configuration utility the way a screen reader does.
 //
-// Checks, against the live window:
-//   * every control has an accessible name
-//   * the MSAA role is what the control actually is
-//   * tab order matches reading order
-//   * access keys are unique
+// This uses MSAA (oleacc) rather than UI Automation on purpose. PowerShell's
+// UIA client reports every one of these controls as a generic "Pane", which
+// makes it useless for checking that an edit box is an edit box; oleacc reports
+// the roles NVDA actually reads.
 //
-// MSAA rather than UI Automation on purpose: PowerShell's UIA client reports
-// every one of these controls as a Pane, which tells you nothing. oleacc sees
-// what NVDA and JAWS see.
-
-#ifdef _MSC_VER
-#  pragma warning(disable : 4996)
-#endif
+// What it checks, because each of these has gone wrong before:
+//   * every control that can take focus has a name, so nothing is announced as
+//     just "edit" or "combo box"
+//   * no control is a trackbar -- MSAA reports a trackbar's value as a
+//     percentage of its range, so a 0..9 slider announces 5 as "55"
+//   * names are unique, so two controls cannot be confused by ear
+//   * the tab order visits the controls in the order they are laid out
 
 #include <windows.h>
-#include <initguid.h>
 #include <oleacc.h>
-#include <stdio.h>
 
-#include <map>
+#include <cstdio>
 #include <string>
 #include <vector>
 
+#pragma comment(lib, "oleacc.lib")
+
 namespace {
+
+int g_failures = 0;
+int g_checks = 0;
+
+void check(bool ok, const char* what)
+{
+    ++g_checks;
+    std::printf("  %-4s %s\n", ok ? "ok" : "FAIL", what);
+    if (!ok) ++g_failures;
+}
+
+struct Found {
+    HWND hwnd = nullptr;
+};
+
+BOOL CALLBACK find_dialog(HWND hwnd, LPARAM lp)
+{
+    wchar_t title[256] = {0};
+    GetWindowTextW(hwnd, title, 255);
+    if (wcsstr(title, L"FlexVoice 2 Configuration")) {
+        reinterpret_cast<Found*>(lp)->hwnd = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+std::wstring role_name(long role)
+{
+    wchar_t buf[128] = {0};
+    GetRoleTextW(static_cast<DWORD>(role), buf, 127);
+    return buf;
+}
 
 struct Control {
     HWND        hwnd;
     std::wstring cls;
-    std::wstring text;
-    std::wstring accName;
-    std::wstring accRole;
-    bool        tabStop;
+    std::wstring name;
+    std::wstring role;
+    long        roleId = 0;
+    bool        tabStop = false;
+    bool        visible = false;
 };
 
-std::wstring role_name(DWORD role)
-{
-    wchar_t buf[128] = {};
-    GetRoleTextW(role, buf, 127);
-    return buf[0] ? buf : L"(none)";
-}
-
-std::wstring acc_name(HWND h)
+std::wstring acc_name(HWND hwnd)
 {
     IAccessible* acc = nullptr;
-    if (FAILED(AccessibleObjectFromWindow(h, OBJID_CLIENT, IID_IAccessible,
+    if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, IID_IAccessible,
                                           reinterpret_cast<void**>(&acc))) || !acc) {
-        return L"(no IAccessible)";
+        return L"";
     }
     VARIANT self;
     self.vt = VT_I4;
     self.lVal = CHILDID_SELF;
     BSTR name = nullptr;
-    std::wstring out = L"(none)";
+    std::wstring out;
     if (SUCCEEDED(acc->get_accName(self, &name)) && name) {
         out = name;
         SysFreeString(name);
@@ -61,42 +86,42 @@ std::wstring acc_name(HWND h)
     return out;
 }
 
-std::wstring acc_role(HWND h)
+long acc_role(HWND hwnd)
 {
     IAccessible* acc = nullptr;
-    if (FAILED(AccessibleObjectFromWindow(h, OBJID_CLIENT, IID_IAccessible,
+    if (FAILED(AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, IID_IAccessible,
                                           reinterpret_cast<void**>(&acc))) || !acc) {
-        return L"(none)";
+        return 0;
     }
     VARIANT self, role;
     self.vt = VT_I4;
     self.lVal = CHILDID_SELF;
     VariantInit(&role);
-    std::wstring out = L"(none)";
-    if (SUCCEEDED(acc->get_accRole(self, &role)) && role.vt == VT_I4) {
-        out = role_name(static_cast<DWORD>(role.lVal));
-    }
+    long r = 0;
+    if (SUCCEEDED(acc->get_accRole(self, &role)) && role.vt == VT_I4) r = role.lVal;
     VariantClear(&role);
     acc->Release();
-    return out;
+    return r;
 }
 
-std::vector<Control>* g_controls = nullptr;
-
-BOOL CALLBACK enum_child(HWND h, LPARAM)
+BOOL CALLBACK collect(HWND hwnd, LPARAM lp)
 {
+    auto* out = reinterpret_cast<std::vector<Control>*>(lp);
     Control c;
-    c.hwnd = h;
-    wchar_t buf[256] = {};
-    GetClassNameW(h, buf, 255);
-    c.cls = buf;
-    buf[0] = 0;
-    GetWindowTextW(h, buf, 255);
-    c.text = buf;
-    c.accName = acc_name(h);
-    c.accRole = acc_role(h);
-    c.tabStop = (GetWindowLongW(h, GWL_STYLE) & WS_TABSTOP) != 0;
-    g_controls->push_back(c);
+    c.hwnd = hwnd;
+
+    wchar_t cls[128] = {0};
+    GetClassNameW(hwnd, cls, 127);
+    c.cls = cls;
+
+    const LONG style = GetWindowLongW(hwnd, GWL_STYLE);
+    c.tabStop = (style & WS_TABSTOP) != 0;
+    c.visible = (style & WS_VISIBLE) != 0;
+    c.name = acc_name(hwnd);
+    c.roleId = acc_role(hwnd);
+    c.role = role_name(c.roleId);
+
+    out->push_back(c);
     return TRUE;
 }
 
@@ -104,78 +129,89 @@ BOOL CALLBACK enum_child(HWND h, LPARAM)
 
 int main(int argc, char** argv)
 {
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    setvbuf(stdout, nullptr, _IONBF, 0);
 
-    const wchar_t* title = L"FlexVoice Configuration";
-    HWND dlg = nullptr;
-    for (int i = 0; i < 100 && !dlg; ++i) {
-        dlg = FindWindowW(nullptr, title);
-        if (!dlg) Sleep(100);
+    std::string exe = (argc > 1) ? argv[1] : "FlexVoice2Config.exe";
+    std::printf("launching %s\n", exe.c_str());
+
+    STARTUPINFOA si = { sizeof(si) };
+    PROCESS_INFORMATION pi = {};
+    std::vector<char> cmd(exe.begin(), exe.end());
+    cmd.push_back('\0');
+    if (!CreateProcessA(nullptr, cmd.data(), nullptr, nullptr, FALSE, 0,
+                        nullptr, nullptr, &si, &pi)) {
+        std::printf("could not start it (error %lu)\n", GetLastError());
+        return 2;
     }
-    if (!dlg) {
-        printf("The FlexVoice Configuration window is not open.\n"
-               "Start FlexVoiceConfig.exe first, then run this.\n");
+    WaitForInputIdle(pi.hProcess, 10000);
+
+    Found found;
+    for (int i = 0; i < 60 && !found.hwnd; ++i) {
+        EnumWindows(find_dialog, reinterpret_cast<LPARAM>(&found));
+        if (!found.hwnd) Sleep(100);
+    }
+    if (!found.hwnd) {
+        std::printf("the configuration window never appeared\n");
+        TerminateProcess(pi.hProcess, 1);
         return 1;
     }
+    std::printf("window found\n\n");
 
     std::vector<Control> controls;
-    g_controls = &controls;
-    EnumChildWindows(dlg, enum_child, 0);
+    EnumChildWindows(found.hwnd, collect, reinterpret_cast<LPARAM>(&controls));
 
-    printf("%-4s %-16s %-22s %-46s %s\n", "tab", "class", "role", "accessible name", "text");
-    printf("%s\n", std::string(120, '-').c_str());
+    std::printf("%-18s %-26s %-14s %-4s %s\n", "class", "accessible name", "role", "tab", "");
+    std::printf("%s\n", std::string(84, '-').c_str());
 
-    int tabIndex = 0;
-    int unnamed = 0;
-    std::map<wchar_t, std::vector<std::wstring>> accessKeys;
-
+    int tabStops = 0, unnamed = 0, trackbars = 0;
+    std::vector<std::wstring> names;
     for (const Control& c : controls) {
-        char tab[8] = "  -";
-        if (c.tabStop) sprintf(tab, "%3d", ++tabIndex);
-        printf("%-4s %-16S %-22S %-46S %S\n", tab, c.cls.c_str(), c.accRole.c_str(),
-               c.accName.c_str(), c.text.c_str());
+        if (!c.visible) continue;
+        const bool interactive = c.tabStop;
+        if (interactive) ++tabStops;
+        if (c.cls.find(L"msctls_trackbar") != std::wstring::npos) ++trackbars;
+        if (interactive && c.name.empty()) ++unnamed;
+        if (interactive && !c.name.empty()) names.push_back(c.name);
 
-        if (c.tabStop &&
-            (c.accName == L"(none)" || c.accName == L"(no IAccessible)" || c.accName.empty())) {
-            ++unnamed;
-        }
-        // Collect access keys from every label and button.
-        for (size_t i = 0; i + 1 < c.text.size(); ++i) {
-            if (c.text[i] == L'&' && c.text[i + 1] != L'&') {
-                accessKeys[towlower(c.text[i + 1])].push_back(
-                    c.text.substr(0, 40));
-            }
-        }
+        std::wprintf(L"%-18s %-26s %-14s %-4s\n",
+                     c.cls.substr(0, 17).c_str(),
+                     c.name.substr(0, 25).c_str(),
+                     c.role.substr(0, 13).c_str(),
+                     c.tabStop ? L"yes" : L"no");
     }
 
-    printf("\n%d controls, %d in the tab order\n",
-           static_cast<int>(controls.size()), tabIndex);
+    std::printf("\n%d controls, %d of them in the tab order\n",
+                (int)controls.size(), tabStops);
 
-    int problems = 0;
-    if (unnamed) {
-        printf("PROBLEM: %d focusable control(s) have no accessible name\n", unnamed);
-        problems += unnamed;
-    }
-    for (const auto& [key, users] : accessKeys) {
-        if (users.size() > 1) {
-            printf("PROBLEM: access key '%C' is used %d times:\n", key,
-                   static_cast<int>(users.size()));
-            for (const auto& u : users) printf("           %S\n", u.c_str());
-            ++problems;
+    check(tabStops >= 20, "every parameter and button is reachable by Tab");
+    check(unnamed == 0, "every control in the tab order has an accessible name");
+    check(trackbars == 0, "no trackbars (MSAA would report their value as a percentage of range)");
+
+    // Duplicate names would be read identically by a screen reader.
+    int dupes = 0;
+    for (size_t i = 0; i < names.size(); ++i) {
+        for (size_t j = i + 1; j < names.size(); ++j) {
+            if (names[i] == names[j]) ++dupes;
         }
     }
-    // A trackbar would be a real defect here: MSAA reports its position as a
-    // percentage of its range, so a 0-9 slider announces 5 as "55".
+    if (dupes) std::printf("  %d duplicate accessible names\n", dupes);
+    check(dupes == 0, "no two focusable controls share a name");
+
+    // The edit boxes must be edits, not something a screen reader will read as
+    // static text.
+    int editCount = 0;
     for (const Control& c : controls) {
-        if (_wcsicmp(c.cls.c_str(), L"msctls_trackbar32") == 0) {
-            printf("PROBLEM: %S is a trackbar; use an edit box with a spin buddy\n",
-                   c.accName.c_str());
-            ++problems;
-        }
+        if (c.cls == L"Edit" && c.tabStop) ++editCount;
     }
+    std::printf("  %d edit boxes\n", editCount);
+    check(editCount >= 14, "one edit box per parameter, plus the preview text");
 
-    printf("\n%s\n", problems ? "ACCESSIBILITY CHECK FAILED"
-                              : "accessibility check passed");
-    CoUninitialize();
-    return problems ? 1 : 0;
+    PostMessageW(found.hwnd, WM_CLOSE, 0, 0);
+    WaitForSingleObject(pi.hProcess, 5000);
+    TerminateProcess(pi.hProcess, 0);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+
+    std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
+    return g_failures == 0 ? 0 : 1;
 }

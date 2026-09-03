@@ -1,0 +1,21 @@
+#include <windows.h>
+#include "resource.h"
+
+// The dialog is deliberately an empty shell. Every control is created in
+// FlexVoiceConfig.cpp, in exactly the order it should be reached by Tab,
+// because z-order is tab order and there are fourteen parameter rows whose
+// label / edit / spin triples must stay in lockstep. Building them in code
+// also means one place sets the MSAA name on every control, rather than
+// relying on a screen reader inferring it from the nearest preceding static.
+
+IDD_CONFIG DIALOGEX 0, 0, 386, 268
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "FlexVoice Configuration"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+END
+
+STRINGTABLE
+BEGIN
+    IDD_CONFIG "FlexVoice Configuration"
+END

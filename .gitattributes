@@ -1,0 +1,4 @@
+* text=auto
+*.tav text eol=crlf
+*.iss text eol=crlf
+*.bat text eol=crlf

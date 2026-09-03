@@ -1,0 +1,54 @@
+// version.rc -- the VERSIONINFO block every binary in this project carries.
+//
+// Each target defines FV_FILE_DESCRIPTION and FV_INTERNAL_NAME on its own
+// command line, so this one file serves the SAPI DLLs, the engine host, the
+// configuration utility and the diagnostics.
+
+#include <windows.h>
+#include "version.h"
+
+#ifndef FV_FILE_DESCRIPTION
+#  define FV_FILE_DESCRIPTION "FlexVoice SAPI5"
+#endif
+#ifndef FV_INTERNAL_NAME
+#  define FV_INTERNAL_NAME "flexvoice"
+#endif
+#ifndef FV_ORIGINAL_FILENAME
+#  define FV_ORIGINAL_FILENAME FV_INTERNAL_NAME
+#endif
+#ifndef FV_FILETYPE
+#  define FV_FILETYPE VFT_APP
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    FV_VERSION_MAJOR, FV_VERSION_MINOR, FV_VERSION_PATCH, FV_VERSION_BUILD
+PRODUCTVERSION FV_VERSION_MAJOR, FV_VERSION_MINOR, FV_VERSION_PATCH, FV_VERSION_BUILD
+FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS      VS_FF_DEBUG
+#else
+FILEFLAGS      0x0L
+#endif
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       FV_FILETYPE
+FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"          // US English, Unicode
+        BEGIN
+            VALUE "CompanyName",      FV_COMPANY
+            VALUE "FileDescription",  FV_FILE_DESCRIPTION
+            VALUE "FileVersion",      FV_VERSION_STRING
+            VALUE "InternalName",     FV_INTERNAL_NAME
+            VALUE "LegalCopyright",   FV_COPYRIGHT
+            VALUE "OriginalFilename", FV_ORIGINAL_FILENAME
+            VALUE "ProductName",      FV_PRODUCT
+            VALUE "ProductVersion",   FV_VERSION_STRING
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

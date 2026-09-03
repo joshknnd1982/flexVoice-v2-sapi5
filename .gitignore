@@ -1,0 +1,25 @@
+# Build output
+build/
+build_x86/
+build_x64/
+output/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.idb
+
+# The FlexVoice 2.0 engine and its voice data are Mindmaker's, not ours, and
+# two of the files (RHL2.dat, Julie.bin) are generated at install time rather
+# than shipped. The installer carries all of it; the repository does not.
+engine/
+
+# Generated import library for the engine DLL -- rebuilt by build_all.bat from
+# the DLL's own export table.
+sdk/fv2lib/*.lib
+sdk/fv2lib/*.exp
+
+# Reference copies of Mindmaker's SDK, kept locally while working
+sdk/ttsapi301/
+doc/*.pdf
+doc/*.HLP

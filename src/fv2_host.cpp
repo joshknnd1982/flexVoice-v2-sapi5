@@ -72,14 +72,32 @@ std::string join(const std::string& a, const std::string& b)
 }
 
 // The engine's Data directory: <install>\engine\Data, holding RHL2.dat,
-// Julie.bin and Voices\*.tav. Overridable for development and for the
-// self-test.
+// Julie.bin and Voices\*.tav.
+//
+// FLEXVOICE2_DATA overrides it outright. Otherwise the search walks up from
+// the executable, which matters because a build tree puts the host in
+// build_x86\Release while the engine sits at the root -- and the host is
+// launched as a child process by whichever client wanted it, so it cannot ask
+// anyone where it is.
 std::string engine_data_dir()
 {
     wchar_t buf[MAX_PATH] = {0};
     if (GetEnvironmentVariableW(L"FLEXVOICE2_DATA", buf, MAX_PATH) > 0) {
         return narrow(buf);
     }
+
+    std::string dir = narrow(module_dir());
+    for (int up = 0; up < 4; ++up) {
+        const std::string candidate = join(join(dir, "engine"), "Data");
+        const DWORD attrs = GetFileAttributesA(candidate.c_str());
+        if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+            return candidate;
+        }
+        const size_t slash = dir.find_last_of("\\/");
+        if (slash == std::string::npos) break;
+        dir = dir.substr(0, slash);
+    }
+    // Nothing found; return the installed location so the error names it.
     return join(join(narrow(module_dir()), "engine"), "Data");
 }
 

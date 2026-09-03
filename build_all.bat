@@ -1,50 +1,70 @@
 @echo off
-setlocal enabledelayedexpansion
-rem Build both architectures, stage, and package the installer.
+rem Build FlexVoice 2 SAPI5 end to end: both architectures, then the installer.
+setlocal
 
-set ROOT=%~dp0
-pushd "%ROOT%"
+echo FlexVoice 2 SAPI5 build
+echo.
 
-echo === stopping any running engine host ===
-if exist "build_x86\bin\Release\flexvoice_host.exe" (
-    "build_x86\bin\Release\flexvoice_host.exe" --shutdown >nul 2>&1
+set "ROOT=%~dp0"
+cd /d "%ROOT%"
+
+rem --- the engine import library ------------------------------------------
+rem FlexVoice 2.0 shipped no .lib, so one is generated from the DLL's own
+rem export table. 381 C++ symbols, x86.
+if not exist "%ROOT%sdk\fv2lib\FlexVoice_2_00_010.lib" (
+    echo Generating the engine import library...
+    if not exist "%ROOT%engine\FlexVoice_2_00_010.dll" (
+        echo ERROR: engine\FlexVoice_2_00_010.dll is missing.
+        echo        The engine is not in this repository; see the README.
+        exit /b 1
+    )
+    call :findvs
+    if errorlevel 1 exit /b 1
+    call "%VSDIR%\VC\Auxiliary\Build\vcvars32.bat" >nul
+    lib /nologo /def:"%ROOT%sdk\fv2lib\FlexVoice_2_00_010.def" /machine:x86 ^
+        /out:"%ROOT%sdk\fv2lib\FlexVoice_2_00_010.lib"
+    if errorlevel 1 exit /b 1
 )
-taskkill /F /IM flexvoice_host.exe >nul 2>&1
 
-echo === configuring x86 ===
-cmake -S . -B build_x86 -G "Visual Studio 17 2022" -A Win32 || goto :fail
-echo === building x86 ===
-cmake --build build_x86 --config Release || goto :fail
+echo Building x86 targets...
+cmake -A Win32 -S . -B build_x86
+if errorlevel 1 exit /b 1
+cmake --build build_x86 --config Release
+if errorlevel 1 exit /b 1
 
-echo === configuring x64 ===
-cmake -S . -B build_x64 -G "Visual Studio 17 2022" -A x64 || goto :fail
-echo === building x64 ===
-cmake --build build_x64 --config Release || goto :fail
+echo Building x64 targets...
+cmake -A x64 -S . -B build_x64
+if errorlevel 1 exit /b 1
+cmake --build build_x64 --config Release
+if errorlevel 1 exit /b 1
 
-echo === self test ===
-"build_x86\bin\Release\flexvoice_host.exe" --selftest "%ROOT%bin\fv" || goto :fail
+echo Staging output layout...
+powershell -NoProfile -ExecutionPolicy Bypass -File installer\stage.ps1
+if errorlevel 1 exit /b 1
 
-echo === staging ===
-powershell -NoProfile -ExecutionPolicy Bypass -File "installer\stage.ps1" || goto :fail
-
-echo === installer ===
-set ISCC=%LocalAppData%\Programs\Inno Setup 6\ISCC.exe
-if not exist "%ISCC%" set ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe
+echo Building installer...
+set "ISCC=%LocalAppData%\Programs\Inno Setup 6\ISCC.exe"
+if not exist "%ISCC%" set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" (
-    echo Inno Setup 6 not found; skipping the installer.
-    echo Everything else built successfully.
-    goto :done
+    echo ERROR: Inno Setup 6 compiler not found.
+    exit /b 1
 )
-"%ISCC%" /O"%ROOT%output" "installer\flexvoice.iss" || goto :fail
-echo.
-for %%f in ("%ROOT%output\FlexVoiceSAPI_Setup_*.exe") do echo Installer: %%f
+"%ISCC%" /O"output" installer\flexvoice2.iss
+if errorlevel 1 exit /b 1
 
-:done
-popd
+echo.
+echo Build completed. Installer is in output\
+goto :eof
+
+:findvs
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if not exist "%VSWHERE%" (
+    echo ERROR: vswhere.exe not found. Install Visual Studio 2022 or the Build Tools.
+    exit /b 1
+)
+for /f "usebackq tokens=*" %%i in (`"%VSWHERE%" -products * -latest -property installationPath`) do set "VSDIR=%%i"
+if not defined VSDIR (
+    echo ERROR: no Visual Studio installation found.
+    exit /b 1
+)
 exit /b 0
-
-:fail
-echo.
-echo BUILD FAILED
-popd
-exit /b 1

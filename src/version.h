@@ -11,7 +11,7 @@
 
 #define FV_VERSION_MAJOR 1
 #define FV_VERSION_MINOR 0
-#define FV_VERSION_PATCH 3
+#define FV_VERSION_PATCH 0
 #define FV_VERSION_BUILD 0
 
 #define FV_STRINGIZE2(x) #x
@@ -22,5 +22,5 @@
     FV_STRINGIZE(FV_VERSION_PATCH) "." FV_STRINGIZE(FV_VERSION_BUILD)
 
 #define FV_COMPANY     "Josh Kennedy"
-#define FV_PRODUCT     "FlexVoice SAPI5"
-#define FV_COPYRIGHT   "Copyright (c) 2026 Josh Kennedy. FlexVoice engine (c) Mindmaker Ltd."
+#define FV_PRODUCT     "FlexVoice 2 SAPI5"
+#define FV_COPYRIGHT   "Copyright (c) 2026 Josh Kennedy. FlexVoice 2.0 engine (c) 2001 Mindmaker Ltd."

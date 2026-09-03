@@ -1,155 +1,115 @@
-cmake_minimum_required(VERSION 3.15)
-project(FlexVoiceSAPI VERSION 1.0.3 LANGUAGES C CXX)
+cmake_minimum_required(VERSION 3.20)
+project(FlexVoice2SAPI CXX)
 
-# The single source of truth for the version is src/version.h; keep the
-# project() line, the installer's MyAppVersion and that header in step.
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(BUILD_X64 TRUE)
-    message(STATUS "FlexVoice: building x64 (SAPI DLL only; the engine is 32-bit)")
+# FlexVoice_2_00_010.dll is a 32-bit DLL and no 64-bit build of it exists, so
+# only the SAPI server is built both ways. Everything that touches the engine
+# -- the host and the probes -- is 32-bit only, and the 64-bit SAPI DLL reaches
+# the engine through the host over a named pipe.
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(FV2_X86 TRUE)
 else()
-    set(BUILD_X64 FALSE)
-    message(STATUS "FlexVoice: building x86 (SAPI DLL, engine host, configuration utility)")
+    set(FV2_X86 FALSE)
 endif()
 
-set(COMMON_DEFS _CRT_SECURE_NO_WARNINGS UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 
-# The MindMaker FlexVoice 3.01 SDK. Not redistributable as source; the headers
-# and import library live under bin/ and are excluded from the repository.
-set(FV_SDK ${CMAKE_CURRENT_SOURCE_DIR}/bin/mmfvapi)
+add_compile_definitions(
+    UNICODE _UNICODE
+    WIN32_LEAN_AND_MEAN NOMINMAX
+    _CRT_SECURE_NO_WARNINGS
+)
+add_compile_options(/W3 /EHsc /GR)
+
+set(FV2_ENGINE_LIB ${CMAKE_SOURCE_DIR}/sdk/fv2lib/FlexVoice_2_00_010.lib)
 
 # ---------------------------------------------------------------------------
-# SAPI5 in-process COM server (both architectures)
+# Shared sources
 # ---------------------------------------------------------------------------
-add_library(FlexVoiceSAPI SHARED
+
+set(FV2_COMMON
+    src/fv2_speaker.cpp
+    src/fv2_settings.cpp
+)
+
+# ---------------------------------------------------------------------------
+# The SAPI 5 in-process server, built for both architectures
+# ---------------------------------------------------------------------------
+
+add_library(FlexVoice2SAPI SHARED
     src/sapi_main.cpp
+    src/ISpTTSEngineImpl.cpp
+    src/ISpDataKeyImpl.cpp
     src/com.cpp
     src/registry.cpp
-    src/ISpDataKeyImpl.cpp
-    src/IEnumSpObjectTokensImpl.cpp
-    src/ISpTTSEngineImpl.cpp
-    src/voice_token.cpp
-    src/settings.cpp
-    src/engine_client.cpp
-    src/text_normalize.cpp
-    src/version.rc
-    src/flexvoice_sapi.def
-)
-target_include_directories(FlexVoiceSAPI PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(FlexVoiceSAPI PRIVATE ole32 oleaut32 advapi32 shell32 shlwapi)
-target_compile_definitions(FlexVoiceSAPI PRIVATE ${COMMON_DEFS}
-    FV_FILE_DESCRIPTION="FlexVoice SAPI5 speech engine"
-    FV_INTERNAL_NAME="FlexVoiceSAPI"
-    FV_ORIGINAL_FILENAME="FlexVoiceSAPI.dll"
-    FV_FILETYPE=VFT_DLL)
-set_property(TARGET FlexVoiceSAPI PROPERTY CXX_STANDARD 17)
-
-# Pipe-protocol exerciser, built for both architectures so the 64->32 bridge
-# can be tested without a SAPI host.
-add_executable(client_test
-    test/client_test.cpp
-    src/engine_client.cpp
-    src/settings.cpp
-    src/text_normalize.cpp
+    src/fv2_client.cpp
+    src/fv2_text.cpp
+    ${FV2_COMMON}
     src/version.rc
 )
-target_include_directories(client_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(client_test PRIVATE advapi32 shell32 shlwapi winmm)
-target_compile_definitions(client_test PRIVATE ${COMMON_DEFS}
-    FV_FILE_DESCRIPTION="FlexVoice SAPI5 diagnostics"
-    FV_INTERNAL_NAME="flexvoice_diag")
-set_property(TARGET client_test PROPERTY CXX_STANDARD 17)
+target_link_options(FlexVoice2SAPI PRIVATE "/DEF:${CMAKE_SOURCE_DIR}/src/fv2_sapi.def")
+target_link_libraries(FlexVoice2SAPI PRIVATE
+    sapi ole32 oleaut32 advapi32 shlwapi shell32 user32)
+set_target_properties(FlexVoice2SAPI PROPERTIES OUTPUT_NAME "FlexVoice2SAPI")
 
-# Drives write_voice_tokens and remove_voice_tokens themselves, against a
-# sandbox key in HKCU. sapi_probe registers and unregisters with a helper of
-# its own, so the product's uninstall path had never been run by a test -- and
-# it did not work. Built for both architectures because that path deletes from
-# whichever registry view the caller happens to be in.
-add_executable(registry_test test/registry_test.cpp src/registry.cpp)
-target_include_directories(registry_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(registry_test PRIVATE advapi32)
-target_compile_definitions(registry_test PRIVATE ${COMMON_DEFS})
-set_property(TARGET registry_test PROPERTY CXX_STANDARD 17)
+# ---------------------------------------------------------------------------
+# 32-bit only: the engine host, the configuration utility and the probes
+# ---------------------------------------------------------------------------
 
-# Exercises the real SAPI5 stack. Registers under HKCU so it can run without
-# elevation, which is the only way the registry path SAPI actually takes gets
-# tested before install time.
-add_executable(sapi_probe test/sapi_probe.cpp)
-target_link_libraries(sapi_probe PRIVATE ole32 oleaut32 sapi advapi32)
-target_compile_definitions(sapi_probe PRIVATE ${COMMON_DEFS})
-set_property(TARGET sapi_probe PROPERTY CXX_STANDARD 17)
-
-if(NOT BUILD_X64)
-    # -----------------------------------------------------------------------
-    # Engine host. 32-bit only: the FlexVoice engine DLL is x86.
-    # EngineFactory::createEngine returns std::auto_ptr, which C++17 removed --
-    # _HAS_AUTO_PTR_ETC=1 puts it back without dropping the target to C++14,
-    # and the mangled name is the same either way, so the 2003 import library
-    # still resolves.
-    # -----------------------------------------------------------------------
-    add_executable(flexvoice_host
-        src/flexvoice_host.cpp
-        src/fv_engine.cpp
-        src/settings.cpp
-        src/text_normalize.cpp
+if(FV2_X86)
+    add_executable(fv2_host
+        src/fv2_host.cpp
+        src/fv2_engine.cpp
+        ${FV2_COMMON}
         src/version.rc
     )
-    target_include_directories(flexvoice_host PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${FV_SDK}/include
-    )
-    target_link_directories(flexvoice_host PRIVATE ${FV_SDK}/lib)
-    target_link_libraries(flexvoice_host PRIVATE
-        FlexVoice_3_01_001.lib advapi32 shell32 shlwapi)
-    target_compile_definitions(flexvoice_host PRIVATE ${COMMON_DEFS} _HAS_AUTO_PTR_ETC=1
-        FV_FILE_DESCRIPTION="FlexVoice SAPI5 engine host"
-        FV_INTERNAL_NAME="flexvoice_host"
-        FV_ORIGINAL_FILENAME="flexvoice_host.exe")
-    set_property(TARGET flexvoice_host PROPERTY CXX_STANDARD 17)
-    # The SDK requires RTTI (Engine.h #errors without _CPPRTTI) and throws.
-    target_compile_options(flexvoice_host PRIVATE /EHsc /GR)
 
-    # Reads the configuration utility the way a screen reader does: MSAA names,
-    # roles, tab order and access keys, against the live window.
+    # Everything 32-bit lands in one directory, so one copy of the engine DLL
+    # beside it serves the host, the probes and the tests. Without this they
+    # build fine and then exit silently at startup, because a missing DLL is a
+    # loader failure and never reaches main().
+    add_custom_command(TARGET fv2_host POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/engine/FlexVoice_2_00_010.dll"
+                "$<TARGET_FILE_DIR:fv2_host>/FlexVoice_2_00_010.dll"
+        COMMENT "Copying the FlexVoice 2.0 engine next to the 32-bit binaries")
+    target_link_libraries(fv2_host PRIVATE ${FV2_ENGINE_LIB} shell32 ole32)
+    # std::auto_ptr is in EngineFactory::createEngine's mangled return type, so
+    # the name only matches if the type really is std::auto_ptr -- gone in C++17.
+    target_compile_features(fv2_host PRIVATE cxx_std_14)
+    set_target_properties(fv2_host PROPERTIES CXX_STANDARD 14)
+
+    add_executable(FlexVoice2Config WIN32
+        src/config/FlexVoice2Config.cpp
+        src/fv2_client.cpp
+        ${FV2_COMMON}
+        src/config/FlexVoice2Config.rc
+        src/version.rc
+    )
+    target_link_libraries(FlexVoice2Config PRIVATE
+        comctl32 winmm ole32 oleaut32 oleacc shlwapi shell32 user32 advapi32 gdi32)
+
+    # --- tests ------------------------------------------------------------
+    add_executable(speaker_test test/speaker_test.cpp src/fv2_speaker.cpp)
+
+    add_executable(engine_test
+        test/engine_test.cpp src/fv2_engine.cpp ${FV2_COMMON})
+    target_link_libraries(engine_test PRIVATE ${FV2_ENGINE_LIB} shell32 ole32)
+    set_target_properties(engine_test PROPERTIES CXX_STANDARD 14)
+
+    add_executable(client_test
+        test/client_test.cpp src/fv2_client.cpp ${FV2_COMMON})
+    target_link_libraries(client_test PRIVATE shlwapi shell32 ole32)
+
+    add_executable(sapi_probe test/sapi_probe.cpp src/registry.cpp)
+    target_link_libraries(sapi_probe PRIVATE sapi ole32 oleaut32 advapi32 user32)
+
     add_executable(a11y_probe test/a11y_probe.cpp)
-    target_link_libraries(a11y_probe PRIVATE oleacc ole32 oleaut32 user32)
-    target_compile_definitions(a11y_probe PRIVATE ${COMMON_DEFS})
-    set_property(TARGET a11y_probe PROPERTY CXX_STANDARD 17)
+    target_link_libraries(a11y_probe PRIVATE user32 ole32 oleaut32 oleacc)
 
-    # -----------------------------------------------------------------------
-    # Configuration utility
-    # -----------------------------------------------------------------------
-    add_executable(FlexVoiceConfig WIN32
-        src/config/FlexVoiceConfig.cpp
-        src/config/FlexVoiceConfig.rc
-        src/version.rc
-        src/settings.cpp
-        src/engine_client.cpp
-        src/text_normalize.cpp
-    )
-    target_include_directories(FlexVoiceConfig PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/config
-    )
-    target_link_libraries(FlexVoiceConfig PRIVATE
-        comctl32 winmm advapi32 shell32 shlwapi ole32 oleaut32)
-    target_compile_definitions(FlexVoiceConfig PRIVATE ${COMMON_DEFS}
-        FV_FILE_DESCRIPTION="FlexVoice configuration utility"
-        FV_INTERNAL_NAME="FlexVoiceConfig"
-        FV_ORIGINAL_FILENAME="FlexVoiceConfig.exe")
-    set_property(TARGET FlexVoiceConfig PROPERTY CXX_STANDARD 17)
-endif()
-
-if(MSVC)
-    foreach(tgt FlexVoiceSAPI client_test registry_test sapi_probe a11y_probe flexvoice_host FlexVoiceConfig)
-        if(TARGET ${tgt})
-            target_compile_options(${tgt} PRIVATE /W3 /MP /utf-8)
-            set_property(TARGET ${tgt} PROPERTY
-                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-        endif()
-    endforeach()
+    add_executable(fv2_render
+        probe/fv2_render.cpp src/fv2_speaker.cpp)
+    target_link_libraries(fv2_render PRIVATE ${FV2_ENGINE_LIB})
+    set_target_properties(fv2_render PROPERTIES CXX_STANDARD 14)
 endif()

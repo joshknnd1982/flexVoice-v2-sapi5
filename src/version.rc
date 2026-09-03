@@ -8,10 +8,10 @@
 #include "version.h"
 
 #ifndef FV_FILE_DESCRIPTION
-#  define FV_FILE_DESCRIPTION "FlexVoice SAPI5"
+#  define FV_FILE_DESCRIPTION "FlexVoice 2 SAPI5"
 #endif
 #ifndef FV_INTERNAL_NAME
-#  define FV_INTERNAL_NAME "flexvoice"
+#  define FV_INTERNAL_NAME "flexvoice2"
 #endif
 #ifndef FV_ORIGINAL_FILENAME
 #  define FV_ORIGINAL_FILENAME FV_INTERNAL_NAME

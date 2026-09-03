@@ -52,7 +52,7 @@ void findWord(const unsigned char* p, size_t n, unsigned int value, const char* 
 
 }  // namespace
 
-int main()
+int main(int argc, char** argv)
 {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     // Unbuffered: this probe is expected to crash, and a lost buffer would
@@ -96,5 +96,36 @@ int main()
 
     // ---- and the Speaker, for the record ------------------------------------
     printf("\nsizeof(Speaker) declared = %u\n", (unsigned)sizeof(Speaker));
+    {
+        std::vector<unsigned char> sraw(sizeof(Speaker) + 4096, 0xCD);
+        Speaker* sp = new (sraw.data()) Speaker();
+        size_t t = 0;
+        for (size_t i = sraw.size(); i-- > 0; ) { if (sraw[i] != 0xCD) { t = i + 1; break; } }
+        printf("  default-constructed Speaker touches %u bytes\n", (unsigned)t);
+        sp->~Speaker();
+    }
+
+    // ---- EngineFactory ------------------------------------------------------
+    //
+    // This is the one that matters. If the real EngineFactory is bigger than
+    // the buffer fv2.hpp declares for it, its constructor writes past the end
+    // of our object -- and when that object is a stack local, the damage lands
+    // on the return address of whatever called us. It would show up exactly as
+    // it did: a crash that comes and goes with no relation to the input.
+    if (argc > 1) {
+        printf("\nsizeof(EngineFactory) declared = %u\n", (unsigned)sizeof(EngineFactory));
+        std::vector<unsigned char> fraw(sizeof(EngineFactory) + 65536, 0xCD);
+        EngineFactory* f = new (fraw.data()) EngineFactory(argv[1]);
+        size_t touched = 0;
+        for (size_t i = fraw.size(); i-- > 0; ) {
+            if (fraw[i] != 0xCD) { touched = i + 1; break; }
+        }
+        printf("  constructed from %s\n", argv[1]);
+        printf("  DLL constructor touches %u bytes%s\n", (unsigned)touched,
+               touched > sizeof(EngineFactory) ? "   *** OVERFLOW ***" : "");
+        f->~EngineFactory();
+    } else {
+        printf("\n(pass the data directory to measure EngineFactory)\n");
+    }
     return 0;
 }

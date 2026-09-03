@@ -175,6 +175,7 @@ int main(int argc, char** argv)
     std::vector<std::pair<std::string, double> > pcts;
     double engineRate = 1.0, engineVolume = 1.0;
     bool roundtrip = false;
+    int repeat = 0;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -187,6 +188,7 @@ int main(int argc, char** argv)
         else if (a == "--volume") engineVolume = atof(next().c_str());
         else if (a == "--roundtrip") roundtrip = true;
         else if (a == "--save-tav") saveTav = next();
+        else if (a == "--repeat") repeat = atoi(next().c_str());
         else if (a == "--set") {
             const std::string kv = next();
             const size_t eq = kv.find('=');
@@ -266,6 +268,27 @@ int main(int argc, char** argv)
         if (!def.saveFile(saveTav, err)) { fprintf(stderr, "%s\n", err.c_str()); return 1; }
         printf("wrote %s\n", saveTav.c_str());
         return 0;
+    }
+
+    // --repeat exercises the whole create-render-destroy cycle inside one
+    // process. A fresh process per render made an intermittent teardown crash
+    // look input-dependent when it was not: the same sentence failed roughly
+    // one run in eight, and so did every "suspicious" string tried against it.
+    if (repeat > 0) {
+        const std::string rtmp = tempTav();
+        if (!def.saveFile(rtmp, err)) { fprintf(stderr, "%s\n", err.c_str()); return 1; }
+        int good = 0;
+        for (int i = 0; i < repeat; ++i) {
+            std::vector<unsigned char> p;
+            unsigned m = 0;
+            const bool ok = renderWith(dataDir, rtmp, text, p, engineRate, engineVolume, &m);
+            if (ok && !p.empty()) ++good;
+            printf("  cycle %2d: %s, %u bytes\n", i + 1, ok ? "ok" : "FAILED",
+                   (unsigned)p.size());
+        }
+        DeleteFileA(rtmp.c_str());
+        printf("%d/%d cycles completed\n", good, repeat);
+        return good == repeat ? 0 : 1;
     }
 
     const std::string tmp = tempTav();

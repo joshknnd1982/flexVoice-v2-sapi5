@@ -349,6 +349,9 @@ FlexVoice 2.0 shipped no `.lib`.
 
 ## Licence
 
-The wrapper is under the licence in [LICENSE](LICENSE). The FlexVoice 2.0 engine
-and its voice data are Mindmaker Ltd.'s and are not covered by it; see
+The code written for this project is licensed under the MIT License — see
+[LICENSE](LICENSE). That covers the wrapper, apart from the COM server skeleton
+derived from Gozaltech's BestSpeech SAPI 5 wrapper, which keeps Gozaltech's
+notice and BSD 3-Clause terms in [NOTICE.md](NOTICE.md). The FlexVoice 2.0
+engine and its voice data are Mindmaker Ltd.'s and are not covered by it; see
 [CREDITS.md](CREDITS.md).

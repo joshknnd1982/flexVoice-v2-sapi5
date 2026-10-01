@@ -22,7 +22,9 @@ Named in the engine's own binaries and documentation:
 
 The SAPI 5 wrapper, the engine host, the `.tav` reader and writer, the
 configuration utility and the installer are by **Josh Kennedy**, 2026, and are
-released under the licence in [LICENSE](LICENSE).
+released under the MIT License ([LICENSE](LICENSE)), except for the COM server
+skeleton derived from Gozaltech's BestSpeech SAPI 5 wrapper, which keeps
+Gozaltech's notice ([NOTICE.md](NOTICE.md)).
 
 It descends from the same author's earlier SAPI 5 wrappers — bestSpeech, and
 then FlexVoice 3.01 — and carries their architecture forward: the 32-bit host

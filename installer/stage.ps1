@@ -44,7 +44,7 @@ if (-not (Test-Path (Join-Path $dataDst 'FVZip.exe'))) {
     throw "FVZip.exe is missing from $dataDst; the installer cannot build RHL2.dat or Julie.bin"
 }
 
-foreach ($doc in 'README.md', 'LICENSE', 'CREDITS.md') {
+foreach ($doc in 'README.md', 'LICENSE', 'NOTICE.md', 'CREDITS.md') {
     $p = Join-Path $root $doc
     if (Test-Path $p) { Copy-Item $p $out }
 }
